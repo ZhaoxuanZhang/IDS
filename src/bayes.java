@@ -1,3 +1,4 @@
+//IDS
 import java.lang.Math;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -1109,7 +1110,7 @@ public class bayes{
     	 
         try  {
                 
-                String path = "C:/Users/Admin/Desktop/test data/bayes/";// path for the data file
+                String path = "C:/testdata/bayes/";// path for the data file
                 new bayes( path,  "newTest5050.arff", "NewTest5050t.arff", "bayes1.txt");// Training, Test, Output file contains all grams and show times.
                 System.out.println("done");
 
