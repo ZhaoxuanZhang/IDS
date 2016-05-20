@@ -1,5 +1,4 @@
-//github
-//IDS
+//github//IDS
 import java.lang.Math;
 import java.io.FileReader;
 import java.io.FileWriter;
