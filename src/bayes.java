@@ -47,6 +47,20 @@ public class bayes{
 	private ArrayList<Integer> label_real=new ArrayList<Integer>();
 	private ArrayList<Integer> label_oneClass=new ArrayList<Integer>();
 	private ArrayList<Integer> label_twoClass=new ArrayList<Integer>();
+	private ArrayList<Integer> slide_label_twoClass=new ArrayList<Integer>();
+	//
+	private ArrayList<String>slideGramInNorm = new ArrayList<String>();
+	private ArrayList<String>slideGramInAnom = new ArrayList<String>();
+	private ArrayList<Integer>slideGramNumsInNorm = new ArrayList<Integer>();
+	private ArrayList<Integer>slideGramNumsInAnom = new ArrayList<Integer>();
+	private ArrayList<Float>slideBayes = new ArrayList<Float>();
+	private int []slidePackNum = new int[3];//0 is AnomNum, 1 is NormNum;//2 is total
+	private ArrayList<Float> slideNormPackBayesian=new ArrayList();
+	private ArrayList<Float> slideAnomPackBayesian=new ArrayList();
+	private int []slide_tp=new int[4];//tp,tn,fp,fn
+	// KwInAnom<>,kwInNorm<>,anNum<>,nmNum<>, Beyesian<>, kwTimesInAnom<>;
+	//for testNew5gram();
+	private ArrayList<Float> slideBayesianResult=new ArrayList();
 	//
 	private int[] getFeature(String kwValue){
 		int[]feature =new int[4];//length,#ofWords,#ofSymbles,#ofCn
@@ -1000,7 +1014,7 @@ public class bayes{
 		while(j<label_real.size()){
 			if(label_real.get(j)==1){
 				anom_num++;
-				if(label_oneClass.get(j)==1 || label_twoClass.get(j)==1){
+				if(label_oneClass.get(j)==1 || label_twoClass.get(j)==1 || slide_label_twoClass.get(j)==1){
 					//combined_result.add(1);
 					tp++;
 				}
@@ -1011,7 +1025,7 @@ public class bayes{
 			}
 			else{
 				norm_num++;
-				if(label_oneClass.get(j)==0 || label_twoClass.get(j)==0){
+				if(label_oneClass.get(j)==0 || label_twoClass.get(j)==0 || slide_label_twoClass.get(j)==0){
 					//combined_result.add(0);
 				}
 				else {
@@ -1049,6 +1063,209 @@ public class bayes{
 		fpr1=(double) fp1/norm_num;		
 		System.out.println("TP: "+ tpr1);
 		System.out.println("FP: "+ fpr1);		
+	}
+	//-------------------------------slideNgram--------------------------
+	public void getSlideNgram(String value, int n, String isNorm){
+		value=value.replaceAll("\'", "");
+		value=value.replaceAll(" ","");
+		int gramNum=0;
+		if(value.length()<n) gramNum=1;
+		else gramNum=value.length()-n+1;
+		int idx=0;
+		String []gram= new String[gramNum];
+		for(int i=0;i<gramNum;i++){
+			gram[i]="";
+		}
+		for(int i=0;i<gramNum;i++){
+			idx=i;
+			int j=0;
+			while(j<n && j<value.length()){
+				gram[i]+=value.charAt(idx+j);
+				j++;
+			}
+			if(isNorm.equals("anom")){
+				if(slideGramInAnom.contains(gram[i])){
+					slideGramNumsInAnom.set(slideGramInAnom.indexOf(gram[i]), slideGramNumsInAnom.get(slideGramInAnom.indexOf(gram[i]))+1);
+				}
+				else{
+					slideGramInAnom.add(gram[i]);
+					slideGramNumsInAnom.add(1);
+				}
+			}
+			else{
+				if(slideGramInNorm.contains(gram[i])){
+					slideGramNumsInNorm.set(slideGramInNorm.indexOf(gram[i]), slideGramNumsInNorm.get(slideGramInNorm.indexOf(gram[i]))+1);
+				}
+				else{
+					slideGramInNorm.add(gram[i]);
+					slideGramNumsInNorm.add(1);
+				}
+			}
+		}
+		//System.out.println("getGramDone");
+	}
+	public void getBayesInSlideNgram(){
+		float p=0;
+		for(int i=0;i<slideGramInAnom.size();i++){
+			if(slideGramInNorm.contains(slideGramInAnom.get(i))){
+				p=(float) slideGramNumsInAnom.get(i)/(slideGramNumsInAnom.get(i)+slideGramNumsInNorm.get(slideGramInNorm.indexOf(slideGramInAnom.get(i))));
+			}
+			else p=1;
+			slideBayes.add(p);
+			System.out.println(i);
+		}
+		System.out.println("bayesDone");
+	}
+	public void trainSlideNgram(Instances Inst, int maxN, String path)throws IOException{
+		int i=0;
+		int idx=0;
+		int pNum;
+		String pLoad;
+		String isNorm;
+		String kw;
+		String value;
+		int  p=0;
+		for(i=0;i<Inst.numInstances();i++){
+			pNum=Integer.parseInt(Inst.instance(i).toString(0));
+			isNorm=Inst.instance(i).toString(2);
+			if(isNorm.equals("anom")) slidePackNum[1]++;
+			else slidePackNum[0]++;
+			while(i<Inst.numInstances()&&(idx=Integer.parseInt(Inst.instance(i).toString(0)))==pNum){
+				pLoad=Inst.instance(i).toString(1);
+				String[]temp=pLoad.split("=");
+				kw=temp[0];
+				value=temp[1];
+				getSlideNgram(value,maxN,isNorm);
+				i++;
+			}
+			p++;
+			System.out.println(p);
+			i--;
+		}
+		getBayesInSlideNgram();
+		show(path);
+	}
+	public void testSlideNgram(Instances Inst, int maxN, String path)throws IOException{
+		FileWriter writer = new FileWriter(path+"ResultBySlideNgram.txt");
+		FileWriter writer2=new FileWriter(path+"ResultBySlideNgram1.txt");
+		int i=0;
+		int idx=0;
+		int pNum;
+		String pLoad;
+		String isNorm;
+		String kw;
+		String value;
+		float p;
+		ArrayList<Float> kwP = new ArrayList();
+		for(i=0;i<slidePackNum.length;i++){
+			slidePackNum[i]=0;
+		}
+		for(i=0;i<slide_tp.length;i++){
+			slide_tp[i]=0;
+		}
+		for(i=0;i<Inst.numInstances();i++){
+			pNum=Integer.parseInt(Inst.instance(i).toString(0));
+			isNorm=Inst.instance(i).toString(2);
+			slidePackNum[2]++;
+			if(isNorm.equals("anom")) slidePackNum[1]++;
+			else slidePackNum[0]++;
+			writer.append("\n"+"pack"+slidePackNum[2]+"("+isNorm+")"+":"+"\n");
+			float MaxAveP=0;
+			float PackAveP=0;
+			float aveP = 0;
+			while(i<Inst.numInstances()&&(idx=Integer.parseInt(Inst.instance(i).toString(0)))==pNum){
+				pLoad=Inst.instance(i).toString(1);
+				String[]temp=pLoad.split("=");
+				kw=temp[0];
+				value=temp[1];
+				value=value.replaceAll("\'", "");
+				value=value.replaceAll(" ","");
+				int gramNum=0;
+				if(value.length()<maxN) gramNum=1;
+				else gramNum=value.length()-maxN+1;
+				int idxOfvalue=0;
+				String []gram= new String[gramNum];
+				for(int j=0;j<gramNum;j++){
+					gram[j]="";
+				}
+				aveP=0;
+				PackAveP=0;
+				for(int j=0;j<gramNum;j++){
+					idxOfvalue=j;
+					int k=0;
+					while(k<maxN && k<value.length()){
+						gram[j]+=value.charAt(k+idxOfvalue);
+						k++;
+					}
+					writer.append("Value"+j+": "+"\n");
+					if(slideGramInAnom.contains(gram[j])){
+						p=slideBayes.get(slideGramInAnom.indexOf(gram[j]));
+						writer.append(gram[j]+" "+p+"\n");
+						aveP+=p*p;
+					}
+					else{
+						if(slideGramInNorm.contains(gram[j])){
+							p=0;
+							writer.append(gram[j]+" "+p+"\n");
+							aveP+=p*p;
+						}
+						else{
+							p=1;
+							writer.append(gram[j]+" "+p+"(new)"+"\n");
+							aveP+=p*p;
+						}
+					}
+				}
+				aveP= (float) Math.sqrt(aveP/gramNum);
+				//System.out.println(aveP);
+				kwP.add(aveP);
+				i++;
+			}
+			for(int n=0;n<kwP.size();n++){
+				if(kwP.get(n)>MaxAveP||kwP.get(n)==MaxAveP){
+					MaxAveP=kwP.get(n);
+				}
+				PackAveP+=kwP.get(n)*kwP.get(n);
+			}
+			PackAveP=(float)Math.sqrt(PackAveP/kwP.size());
+			//if(kwP.size()!=0) PackAveP=(float)PackAveP/kwP.size();
+			//if(kwP.size()==0) PackAveP=1;
+			writer2.append("pack"+slidePackNum[2]+"+("+isNorm +"): "+MaxAveP+" "
+					+PackAveP+"\n");
+			//System.out.println(MaxAveP);
+			if(PackAveP>shrshd||PackAveP==shrshd){// attack predicted
+				slide_label_twoClass.add(1);
+				if(isNorm.equals("anom")){
+					slide_tp[0]++;//tp
+				}
+				else
+					slide_tp[2]++;//fp
+			}
+			else{// normal predicted
+				slide_label_twoClass.add(0);
+				if(isNorm.equals("norm")){
+					slide_tp[1]++;//tn
+				}
+				else
+					slide_tp[3]++;//fn
+			}
+			kwP.clear();
+			System.out.println(slidePackNum[2]);
+			i--;
+		}
+		float tpr = (float) slide_tp[0]/(slide_tp[0]+slide_tp[3]);//tp/ tp+fn
+		float fpr = (float) slide_tp[2]/(slide_tp[1]+slide_tp[2]);//fp/ fp+tn
+		System.out.println(slidePackNum[0]);
+		System.out.println(slidePackNum[1]);
+		System.out.println(tpr);
+		System.out.println(fpr);
+		System.out.println((float)slide_tp[0]/slidePackNum[1]);
+		System.out.println((float)slide_tp[2]/slidePackNum[0]);
+		writer2.append("tpr:"+tpr+"  fpr:"+fpr+"\n");
+		writer.flush();
+		writer.close();
+		writer2.flush();
+		writer2.close();
 	}
 	public bayes(String path, String trainFileName, String testFileName, String outFileName )throws Exception{
 		try{
@@ -1101,6 +1318,9 @@ public class bayes{
             testNew5gram(testInst,5,path);
             TrainFeature(trainInst);
             TestFeature(testInst, path);
+            //combinedResult();
+            trainSlideNgram(trainInst,5,path);
+            testSlideNgram(testInst,5,path);
             combinedResult();
 		}catch (Exception e) {
             System.err.println(e.getMessage());
